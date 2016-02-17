@@ -27,6 +27,15 @@ cluster <- function(row, centroids){
     return(which.min(means))
 }
 
+# Returns the sum of squared error
+SSE <- function(df, centers){
+    df %>% 
+        rowwise %>%
+        mutate(d = dist(c(Petal.Length, Petal.Width), centers[Species, ])) %>%
+        select(d) %>%
+        sum
+}
+
 #---------------------------------------------------
 # Let's try K-means on petal length vs petal width
 
@@ -39,7 +48,7 @@ permute <- sample(1:nrow(iris))
 petal <- select(iris, Petal.Length, Petal.Width)[permute, ]
 
 # Initial values for centers
-centroids <- sample_n(petal, K) %>% mutate(groups = factor(1:K))
+centroids <- sample_n(petal, K) %>% mutate(Species = factor(1:K))
 not.optimum <- TRUE
 iteration <- 1
 
@@ -47,7 +56,7 @@ while(not.optimum){
 
     # Assign and label observations based on distance from centers
     groups <- apply(petal, 1, function(row){ cluster(row, centroids[, 1:2]) })
-    petal.grp <- mutate(petal, groups = factor(groups))
+    petal.grp <- mutate(petal, Species = factor(groups))
 
     # Plot clustering
     df <-rbind(mutate(petal.grp, center = FALSE), 
@@ -55,14 +64,14 @@ while(not.optimum){
 
     ggplot(data = df, 
             aes(x = Petal.Length, y = Petal.Width, 
-            color = groups, shape = center, size = center)) +
+            color = Species, shape = center, size = center)) +
         geom_point()
 
-    ggsave(paste("iteration", iteration, ".png", sep=""))
+    ggsave(paste("iteration", iteration, ".png", sep=""), width = 6, height = 6)
     
     # Update centroid means and preserve column order
     update <- petal.grp %>%
-                group_by(groups) %>%
+                group_by(Species) %>%
                 summarise_each(funs(mean)) %>%
                 select(Petal.Length, Petal.Width, groups)
 
@@ -81,10 +90,20 @@ while(not.optimum){
     iteration <- iteration + 1
 }
 
+# Compare SSE of actual data vs our result
+centers <- centroids %>% 
+                arrange(Species) %>% 
+                select(-Species)
+
+real_centers <- iris %>%
+                    group_by(Species) %>%
+                    summarise_each(funs(mean)) %>%
+                    select(Petal.Length, Petal.Width)
 
 
-
-
+sprintf("SSE for k-Means chosen group: %.4f", SSE(petal.grp, centers))
+sprintf("SSE for original data: %.4f", 
+        SSE(mutate(iris, Species = as.numeric(Species)), real_centers))
 
 
 
